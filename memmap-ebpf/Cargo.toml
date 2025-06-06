@@ -1,0 +1,17 @@
+[package]
+name = "memmap-ebpf"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+memmap-common = { path = "../memmap-common" }
+
+aya-ebpf = { workspace = true }
+aya-log-ebpf = { workspace = true }
+
+[build-dependencies]
+which = { workspace = true }
+
+[[bin]]
+name = "memmap"
+path = "src/main.rs"
