@@ -1,0 +1,44 @@
+minimumLimaVersion: 1.1.0
+
+images:
+  - location: https://download.fedoraproject.org/pub/fedora/linux/releases/42/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-42-1.1.x86_64.qcow2
+    arch: x86_64
+    digest: sha256:e401a4db2e5e04d1967b6729774faa96da629bcf3ba90b67d8d9cce9906bec0f
+
+  - location: https://download.fedoraproject.org/pub/fedora/linux/releases/42/Cloud/aarch64/images/Fedora-Cloud-Base-Generic-42-1.1.aarch64.qcow2
+    arch: aarch64
+    digest: sha256:e10658419a8d50231037dc781c3155aa94180a8c7a74e5cac2a6b09eaa9342b7
+
+  - location: https://dl.fedoraproject.org/pub/alt/risc-v/release/42/Cloud/riscv64/images/Fedora-Cloud-Base-Generic-42.20250414-8635a3a5bfcd.riscv64.qcow2
+    arch: riscv64
+    digest: sha256:537c67710f4f1c9112fecaafafc293b649acd1d35b46619b97b5a5a0132241b0
+
+mounts:
+  - location: "~"
+    writable: true
+
+  - location: "{{.GlobalTempDir}}/lima"
+    mountPoint: /tmp/lima
+    writable: true
+
+memory: "8GiB"
+cpus: 4
+disk: "30GiB"
+
+provision:
+  - mode: user
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+      sudo dnf update -y
+      sudo dnf group install -y headless-management development-tools \
+        c-development system-tools rpm-development-tools security-lab
+      sudo dnf install -y vim bcc bcc-devel kernel kernel-core kernel-headers \
+        kernel-modules kernel-modules-core kernel-modules-extra kernel-tools \
+        kernel-tools-libs linux-firmware strace vim curl grubby which \
+        selinux-policy-targeted libselinux-utils policycoreutils bcc-tools \
+        libbpf-tools
+      echo "SELINUX=permissive" | sudo tee /etc/selinux/config
+      echo "SELINUXTYPE=targeted" | sudo tee -a /etc/selinux/config
+      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- \
+        -y --default-toolchain nightly --profile minimal

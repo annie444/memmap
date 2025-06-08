@@ -3,7 +3,7 @@ resolver = "2"
 members = [
     "memmap",
     "memmap-common",
-    "memmap-ebpf",
+    "memmap-ebpf", "test-alloc",
 ]
 default-members = ["memmap", "memmap-common"]
 
