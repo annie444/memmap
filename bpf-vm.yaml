@@ -48,7 +48,7 @@ provision:
         selinux-policy-targeted libselinux-utils policycoreutils bcc-tools \
         libbpf-tools bpftool clang clang-devel bcc-doc man-pages llvm \
         llvm-devel llvm-doc llvm-static llvm-libunwind llvm-libunwind-devel \
-        llvm-libs
+        llvm-libs bpftrace
       echo "SELINUX=permissive" | sudo tee /etc/selinux/config
       echo "SELINUXTYPE=targeted" | sudo tee -a /etc/selinux/config
       curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- \

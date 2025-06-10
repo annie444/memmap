@@ -1,4 +1,4 @@
-use aya::programs::UProbe;
+use aya::programs::{trace_point::TracePointLinkId, TracePoint, UProbe};
 use clap::Parser;
 #[rustfmt::skip]
 use log::{debug, warn};
@@ -60,6 +60,24 @@ async fn main() -> anyhow::Result<()> {
     load_uprobe(&mut ebpf, "pvalloc_exit", "pvalloc", pid)?;
     load_uprobe(&mut ebpf, "aligned_alloc_enter", "aligned_alloc", pid)?;
     load_uprobe(&mut ebpf, "aligned_alloc_exit", "aligned_alloc", pid)?;
+    load_trace(&mut ebpf, "memmap_kmalloc", "kmem", "kmalloc")?;
+    load_trace(&mut ebpf, "memmap_kfree", "kmem", "kfree")?;
+    load_trace(&mut ebpf, "memmap_cache_alloc", "kmem", "kmem_cache_alloc")?;
+    load_trace(&mut ebpf, "memmap_cache_free", "kmem", "kmem_cache_free")?;
+    load_trace(&mut ebpf, "memmap_mm_page_alloc", "kmem", "mm_page_alloc")?;
+    load_trace(&mut ebpf, "memmap_mm_page_free", "kmem", "mm_page_free")?;
+    load_trace(
+        &mut ebpf,
+        "memmap_percpu_alloc",
+        "percpu",
+        "percpu_alloc_percpu",
+    )?;
+    load_trace(
+        &mut ebpf,
+        "memmap_percpu_free",
+        "percpu",
+        "percpu_free_percpu",
+    )?;
 
     let ctrl_c = signal::ctrl_c();
     println!("Waiting for Ctrl-C...");
@@ -82,4 +100,19 @@ fn load_uprobe<'a>(
     program.load()?;
     program.attach(Some(symbol), 0, "libc", pid)?;
     Ok(program)
+}
+
+fn load_trace<'a>(
+    ebpf: &'a mut aya::Ebpf,
+    name: &'static str,
+    category: &'static str,
+    trace: &'static str,
+) -> anyhow::Result<TracePointLinkId> {
+    let program: &'a mut TracePoint = ebpf
+        .program_mut(name)
+        .ok_or_else(|| anyhow::anyhow!("Unable to find {name} in eBPF object file"))?
+        .try_into()?;
+    program.load()?;
+    let link = program.attach(category, trace)?;
+    Ok(link)
 }

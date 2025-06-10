@@ -6,6 +6,7 @@ default:
 setup:
   rustup install stable
   rustup toolchain install nightly --component rust-src
+  rustup target add "{{ arch() }}-unknown-linux-musl"
   just install-llvm
   just install-bpf-linker
   just install-lima
@@ -49,10 +50,9 @@ install-llvm:
       fi
     fi
   elif [ "{{ os() }}" = "macos" ]; then
-    if ! command -v llvm-config &>/dev/null; then
-      echo "Installing LLVM..."
-      brew install llvm
-    fi
+    echo "Installing LLVM..."
+    brew install llvm
+    brew install filosottile/musl-cross/musl-cross
   else
     echo "Unsupported OS: {{ os() }}"
     exit 1
@@ -135,3 +135,18 @@ sudo *args:
   export RUST_LOG=info
   export RUST_BACKTRACE=full
   sudo --preserve-env=RUST_BACKTRACE,RUST_LOG,PATH,LD_LIBRARY_PATH,LIBRARY_PATH,CPATH,PKG_CONFIG_PATH /root/.cargo/bin/cargo run --package memmap --release -- {{ args }}
+
+[doc("Build the memmap package.")]
+[group("cargo")]
+build:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  export RUST_LOG=info
+  export RUST_BACKTRACE=full
+  if [ "{{ os() }}" = "macos" ]; then
+    CC="{{ arch() }}-linux-musl-gcc" cargo build --package memmap --release \
+      --target="{{ arch() }}-unknown-linux-musl" \
+      --config="target.{{ arch() }}-unknown-linux-musl.linker=\"{{ arch() }}-linux-musl-gcc\""
+  else
+    cargo build --package memmap --release
+  fi
