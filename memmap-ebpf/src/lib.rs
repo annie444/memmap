@@ -12,8 +12,8 @@ use aya_ebpf::{
     maps::{HashMap, StackTrace},
     programs::{ProbeContext, RetProbeContext, TracePointContext},
 };
-use aya_log_ebpf::{error, info};
-use memmap_common::{AllocInfo, CombAllocInfo, CombAllocs};
+use aya_log_ebpf::{error, info, warn};
+use memmap_common::{AllocInfo, CombAllocInfo};
 
 use self::{
     kmalloc::{
@@ -31,7 +31,7 @@ pub static SIZES: HashMap<u32, u64> = HashMap::with_max_entries(10240, 0);
 pub static ALLOCS: HashMap<u64, AllocInfo> = HashMap::with_max_entries(1_000_000, 0);
 
 #[map]
-pub static COMBINED_ALLOCS: HashMap<u64, CombAllocs> = HashMap::with_max_entries(1_000_000, 0);
+pub static COMBINED_ALLOCS: HashMap<u64, CombAllocInfo> = HashMap::with_max_entries(1_000_000, 0);
 
 #[map]
 pub static MEMPTRS: HashMap<u32, u64> = HashMap::with_max_entries(10240, 0);
@@ -278,34 +278,28 @@ pub fn gen_trace_alloc(ctx: &TracePointContext, ptr: u64, size: usize) -> Result
 
 #[inline]
 pub fn update_statistics_tp_add(ctx: &TracePointContext, stack_id: u64, sz: u64) {
-    let existing_cinfo = match COMBINED_ALLOCS.get_ptr_mut(&stack_id) {
-        Some(cinfo) => cinfo,
-        None => {
-            error!(
-                ctx,
-                "No existing combined alloc info for stack_id {}", stack_id
-            );
-            let new_cinfo = CombAllocs {
-                allocs: CombAllocInfo {
+    let existing_cinfo = unsafe {
+        &mut *(match COMBINED_ALLOCS.get_ptr_mut(&stack_id) {
+            Some(cinfo) => cinfo,
+            None => {
+                warn!(
+                    ctx,
+                    "No existing combined alloc info for stack_id {}", stack_id
+                );
+                let new_cinfo = CombAllocInfo {
                     total_size: sz,
                     number_of_allocs: 1,
-                },
-            };
-            let new = &raw const new_cinfo;
-            new.cast_mut()
-        }
+                };
+                let new = &raw const new_cinfo;
+                new.cast_mut()
+            }
+        })
     };
 
-    let mut incremental_cinfo = CombAllocs {
-        allocs: CombAllocInfo {
-            total_size: sz,
-            number_of_allocs: 1,
-        },
-    };
+    existing_cinfo.total_size += sz;
+    existing_cinfo.number_of_allocs += 1;
 
-    unsafe { incremental_cinfo.bits += existing_cinfo.read().bits };
-
-    match COMBINED_ALLOCS.insert(&stack_id, &incremental_cinfo, 0) {
+    match COMBINED_ALLOCS.insert(&stack_id, &existing_cinfo, 0) {
         Ok(_) => info!(ctx, "Updated combined allocs for stack_id {}", stack_id),
         Err(e) => {
             error!(
@@ -318,34 +312,28 @@ pub fn update_statistics_tp_add(ctx: &TracePointContext, stack_id: u64, sz: u64)
 
 #[inline]
 pub fn update_statistics_add(ctx: &RetProbeContext, stack_id: u64, sz: u64) {
-    let existing_cinfo = match COMBINED_ALLOCS.get_ptr_mut(&stack_id) {
-        Some(cinfo) => cinfo,
-        None => {
-            error!(
-                ctx,
-                "No existing combined alloc info for stack_id {}", stack_id
-            );
-            let new_cinfo = CombAllocs {
-                allocs: CombAllocInfo {
+    let existing_cinfo = unsafe {
+        &mut *(match COMBINED_ALLOCS.get_ptr_mut(&stack_id) {
+            Some(cinfo) => cinfo,
+            None => {
+                warn!(
+                    ctx,
+                    "No existing combined alloc info for stack_id {}", stack_id
+                );
+                let new_cinfo = CombAllocInfo {
                     total_size: sz,
                     number_of_allocs: 1,
-                },
-            };
-            let new = &raw const new_cinfo;
-            new.cast_mut()
-        }
+                };
+                let new = &raw const new_cinfo;
+                new.cast_mut()
+            }
+        })
     };
 
-    let mut incremental_cinfo = CombAllocs {
-        allocs: CombAllocInfo {
-            total_size: sz,
-            number_of_allocs: 1,
-        },
-    };
+    existing_cinfo.total_size += sz;
+    existing_cinfo.number_of_allocs += 1;
 
-    unsafe { incremental_cinfo.bits += existing_cinfo.read().bits };
-
-    match COMBINED_ALLOCS.insert(&stack_id, &incremental_cinfo, 0) {
+    match COMBINED_ALLOCS.insert(&stack_id, &existing_cinfo, 0) {
         Ok(_) => info!(ctx, "Updated combined allocs for stack_id {}", stack_id),
         Err(e) => {
             error!(
@@ -359,9 +347,9 @@ pub fn update_statistics_add(ctx: &RetProbeContext, stack_id: u64, sz: u64) {
 #[inline]
 pub fn update_statistics_tp_del(ctx: &TracePointContext, stack_id: u64, sz: u64) {
     let existing_cinfo = match COMBINED_ALLOCS.get_ptr_mut(&stack_id) {
-        Some(cinfo) => cinfo,
+        Some(cinfo) => unsafe { &mut *cinfo },
         None => {
-            error!(
+            warn!(
                 ctx,
                 "Failed to lookup combined allocs for stack_id {}", stack_id
             );
@@ -369,22 +357,25 @@ pub fn update_statistics_tp_del(ctx: &TracePointContext, stack_id: u64, sz: u64)
         }
     };
 
-    let decremental_cinfo = CombAllocs {
-        allocs: CombAllocInfo {
-            total_size: sz,
-            number_of_allocs: 1,
-        },
+    existing_cinfo.total_size -= sz;
+    existing_cinfo.number_of_allocs -= 1;
+    match COMBINED_ALLOCS.insert(&stack_id, &existing_cinfo, 0) {
+        Ok(_) => info!(ctx, "Updated combined allocs for stack_id {}", stack_id),
+        Err(e) => {
+            error!(
+                ctx,
+                "Failed to update combined allocs for stack_id {}: {}", stack_id, e
+            );
+        }
     };
-
-    unsafe { existing_cinfo.read().bits -= decremental_cinfo.bits };
 }
 
 #[inline]
 pub fn update_statistics_del(ctx: &ProbeContext, stack_id: u64, sz: u64) {
     let existing_cinfo = match COMBINED_ALLOCS.get_ptr_mut(&stack_id) {
-        Some(cinfo) => cinfo,
+        Some(cinfo) => unsafe { &mut *cinfo },
         None => {
-            error!(
+            warn!(
                 ctx,
                 "Failed to lookup combined allocs for stack_id {}", stack_id
             );
@@ -392,14 +383,17 @@ pub fn update_statistics_del(ctx: &ProbeContext, stack_id: u64, sz: u64) {
         }
     };
 
-    let decremental_cinfo = CombAllocs {
-        allocs: CombAllocInfo {
-            total_size: sz,
-            number_of_allocs: 1,
-        },
+    existing_cinfo.total_size -= sz;
+    existing_cinfo.number_of_allocs -= 1;
+    match COMBINED_ALLOCS.insert(&stack_id, &existing_cinfo, 0) {
+        Ok(_) => info!(ctx, "Updated combined allocs for stack_id {}", stack_id),
+        Err(e) => {
+            error!(
+                ctx,
+                "Failed to update combined allocs for stack_id {}: {}", stack_id, e
+            );
+        }
     };
-
-    unsafe { existing_cinfo.read().bits -= decremental_cinfo.bits };
 }
 
 #[inline]

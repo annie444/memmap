@@ -8,14 +8,7 @@ pub struct AllocInfo {
     pub stack_id: u64,
 }
 
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub union CombAllocs {
-    pub allocs: CombAllocInfo,
-    pub bits: u64,
-}
-
-#[repr(C)]
+#[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 pub struct CombAllocInfo {
     pub total_size: u64,

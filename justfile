@@ -123,7 +123,7 @@ test *args:
 run *args:
   #!/usr/bin/env bash
   set -euo pipefail
-  export RUST_LOG=info
+  export RUST_LOG=warn
   export RUST_BACKTRACE=full
   cargo run --package memmap -- {{ args }}
 
@@ -132,7 +132,7 @@ run *args:
 sudo *args:
   #!/usr/bin/env bash
   set -euo pipefail
-  export RUST_LOG=info
+  export RUST_LOG=warn
   export RUST_BACKTRACE=full
   sudo --preserve-env=RUST_BACKTRACE,RUST_LOG,PATH,LD_LIBRARY_PATH,LIBRARY_PATH,CPATH,PKG_CONFIG_PATH /root/.cargo/bin/cargo run --package memmap --release -- {{ args }}
 
