@@ -40,9 +40,26 @@ async fn main() -> anyhow::Result<()> {
         warn!("failed to initialize eBPF logger: {e}");
     }
     let Opt { pid } = opt;
-    let program: &mut UProbe = ebpf.program_mut("memmap").unwrap().try_into()?;
-    program.load()?;
-    program.attach(Some("malloc"), 0, "libc", pid)?;
+    load_uprobe(&mut ebpf, "malloc_enter", "malloc", pid)?;
+    load_uprobe(&mut ebpf, "malloc_exit", "malloc", pid)?;
+    load_uprobe(&mut ebpf, "free_enter", "free", pid)?;
+    load_uprobe(&mut ebpf, "calloc_enter", "calloc", pid)?;
+    load_uprobe(&mut ebpf, "calloc_exit", "calloc", pid)?;
+    load_uprobe(&mut ebpf, "realloc_enter", "realloc", pid)?;
+    load_uprobe(&mut ebpf, "realloc_exit", "realloc", pid)?;
+    load_uprobe(&mut ebpf, "mmap_enter", "mmap", pid)?;
+    load_uprobe(&mut ebpf, "mmap_exit", "mmap", pid)?;
+    load_uprobe(&mut ebpf, "munmap_enter", "munmap", pid)?;
+    load_uprobe(&mut ebpf, "posix_memalign_enter", "posix_memalign", pid)?;
+    load_uprobe(&mut ebpf, "posix_memalign_exit", "posix_memalign", pid)?;
+    load_uprobe(&mut ebpf, "memalign_enter", "memalign", pid)?;
+    load_uprobe(&mut ebpf, "memalign_exit", "memalign", pid)?;
+    load_uprobe(&mut ebpf, "valloc_enter", "valloc", pid)?;
+    load_uprobe(&mut ebpf, "valloc_exit", "valloc", pid)?;
+    load_uprobe(&mut ebpf, "pvalloc_enter", "pvalloc", pid)?;
+    load_uprobe(&mut ebpf, "pvalloc_exit", "pvalloc", pid)?;
+    load_uprobe(&mut ebpf, "aligned_alloc_enter", "aligned_alloc", pid)?;
+    load_uprobe(&mut ebpf, "aligned_alloc_exit", "aligned_alloc", pid)?;
 
     let ctrl_c = signal::ctrl_c();
     println!("Waiting for Ctrl-C...");
@@ -50,4 +67,19 @@ async fn main() -> anyhow::Result<()> {
     println!("Exiting...");
 
     Ok(())
+}
+
+fn load_uprobe<'a>(
+    ebpf: &'a mut aya::Ebpf,
+    name: &'static str,
+    symbol: &'static str,
+    pid: Option<i32>,
+) -> anyhow::Result<&'a mut UProbe> {
+    let program: &'a mut UProbe = ebpf
+        .program_mut(name)
+        .ok_or_else(|| anyhow::anyhow!("Unable to find {name} in eBPF object file"))?
+        .try_into()?;
+    program.load()?;
+    program.attach(Some(symbol), 0, "libc", pid)?;
+    Ok(program)
 }
