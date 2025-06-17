@@ -1,0 +1,7 @@
+tracepoint:syscalls:sys_enter_brk {
+  printf("[%d] brk called with address: %lu\n", pid, args.brk);
+}
+
+tracepoint:syscalls:sys_enter_mmap {
+  printf("[%d] mmap called with address: %lu, length: %lu, flags: %lu\n", pid, args.addr, args.len, args.flags);
+}
