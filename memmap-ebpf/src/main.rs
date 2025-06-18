@@ -1,6 +1,13 @@
 #![no_std]
 #![no_main]
 
+// TODO:
+// Allocations: sys_enter_mmap, sys_enter_mmap2, and sys_enter_brk
+// Deallocations: sys_enter_munmap, sys_enter_mremap, and sys_enter_brk
+// Phys alloc: mm:do_page_fault, vmscan:mm_vmscan_direct_reclaim_begin,
+// vmscan:mm_vmscan_direct_reclaim_end
+// Phys free: mm:page_free, mm:page_unmap, and mm:page_release, zap_page_range, __free_pages_ok
+
 use aya_ebpf::{
     helpers::{bpf_get_current_pid_tgid, bpf_probe_read_user},
     macros::{tracepoint, uprobe, uretprobe},

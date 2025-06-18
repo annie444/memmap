@@ -2,6 +2,7 @@
 
 // This file exists to enable the library target.
 
+pub mod helpers;
 pub mod kmalloc;
 pub mod mm_page;
 pub mod percpu;
@@ -39,9 +40,21 @@ pub static MEMPTRS: HashMap<u32, u64> = HashMap::with_max_entries(10240, 0);
 #[map]
 pub static STACK_TRACES: StackTrace = StackTrace::with_max_entries(10240, 0);
 
+#[map]
+pub static PID_FILTER: HashMap<u32, u32> = HashMap::with_max_entries(4, 0);
+
 const PAGE_SIZE: usize = 4096;
 
 static mut WA_MISSING_FREE: bool = false;
+
+#[inline]
+pub fn check_pid() -> Option<()> {
+    let pid = bpf_get_current_pid_tgid() >> 32;
+    if unsafe { PID_FILTER.get(&pid).is_none() } {
+        return Some(());
+    }
+    None
+}
 
 #[inline]
 pub fn trace_event_kmalloc(ctx: &TracePointContext) -> Result<u32, u32> {
